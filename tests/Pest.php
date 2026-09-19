@@ -1,6 +1,7 @@
 <?php
 
-use NoriaLabs\CloudWatch\CloudWatchServiceProvider;
+declare(strict_types=1);
+
 use Orchestra\Testbench\TestCase;
 
 uses(TestCase::class)

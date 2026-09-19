@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Aws\CloudWatchLogs\CloudWatchLogsClient;
 use Aws\CloudWatchLogs\Exception\CloudWatchLogsException;
 use Aws\Command;
@@ -11,7 +13,7 @@ use NoriaLabs\CloudWatch\CloudWatchHandler;
 function makeRecord(string $message = 'Test message', Level $level = Level::Info): LogRecord
 {
     return new LogRecord(
-        datetime: new DateTimeImmutable(),
+        datetime: new DateTimeImmutable,
         channel: 'test',
         level: $level,
         message: $message,
@@ -30,9 +32,9 @@ function makeCloudWatchException(string $code): CloudWatchLogsException
 it('buffers logs until batch size is reached', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
-    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result());
-    $client->shouldReceive('createLogStream')->once()->andReturn(new Result());
-    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result());
+    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result);
+    $client->shouldReceive('createLogStream')->once()->andReturn(new Result);
+    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result);
 
     $handler = new CloudWatchHandler(
         client: $client,
@@ -49,9 +51,9 @@ it('buffers logs until batch size is reached', function () {
 it('flushes remaining logs on close', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
-    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result());
-    $client->shouldReceive('createLogStream')->once()->andReturn(new Result());
-    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result());
+    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result);
+    $client->shouldReceive('createLogStream')->once()->andReturn(new Result);
+    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result);
 
     $handler = new CloudWatchHandler(
         client: $client,
@@ -86,13 +88,13 @@ it('does nothing when flushing an empty buffer', function () {
 it('sets retention policy when configured', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
-    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result());
+    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result);
     $client->shouldReceive('putRetentionPolicy')
         ->once()
         ->with(Mockery::on(fn ($args) => $args['retentionInDays'] === 14))
-        ->andReturn(new Result());
-    $client->shouldReceive('createLogStream')->once()->andReturn(new Result());
-    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result());
+        ->andReturn(new Result);
+    $client->shouldReceive('createLogStream')->once()->andReturn(new Result);
+    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result);
 
     $handler = new CloudWatchHandler(
         client: $client,
@@ -108,10 +110,10 @@ it('sets retention policy when configured', function () {
 it('skips retention policy when set to null', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
-    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result());
+    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result);
     $client->shouldNotReceive('putRetentionPolicy');
-    $client->shouldReceive('createLogStream')->once()->andReturn(new Result());
-    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result());
+    $client->shouldReceive('createLogStream')->once()->andReturn(new Result);
+    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result);
 
     $handler = new CloudWatchHandler(
         client: $client,
@@ -128,9 +130,9 @@ it('skips initialization when already initialized', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
     // Only called once despite two flushes.
-    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result());
-    $client->shouldReceive('createLogStream')->once()->andReturn(new Result());
-    $client->shouldReceive('putLogEvents')->twice()->andReturn(new Result());
+    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result);
+    $client->shouldReceive('createLogStream')->once()->andReturn(new Result);
+    $client->shouldReceive('putLogEvents')->twice()->andReturn(new Result);
 
     $handler = new CloudWatchHandler(
         client: $client,
@@ -148,8 +150,8 @@ it('retries after ResourceNotFoundException by reinitializing', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
     // First init.
-    $client->shouldReceive('createLogGroup')->twice()->andReturn(new Result());
-    $client->shouldReceive('createLogStream')->twice()->andReturn(new Result());
+    $client->shouldReceive('createLogGroup')->twice()->andReturn(new Result);
+    $client->shouldReceive('createLogStream')->twice()->andReturn(new Result);
 
     // First putLogEvents throws ResourceNotFoundException, second succeeds.
     $client->shouldReceive('putLogEvents')
@@ -157,7 +159,7 @@ it('retries after ResourceNotFoundException by reinitializing', function () {
         ->andThrow(makeCloudWatchException('ResourceNotFoundException'));
     $client->shouldReceive('putLogEvents')
         ->once()
-        ->andReturn(new Result());
+        ->andReturn(new Result);
 
     $handler = new CloudWatchHandler(
         client: $client,
@@ -173,8 +175,8 @@ it('retries after ResourceNotFoundException by reinitializing', function () {
 it('rethrows non-ResourceNotFoundException from putLogEvents', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
-    $client->shouldReceive('createLogGroup')->andReturn(new Result());
-    $client->shouldReceive('createLogStream')->andReturn(new Result());
+    $client->shouldReceive('createLogGroup')->andReturn(new Result);
+    $client->shouldReceive('createLogStream')->andReturn(new Result);
     $client->shouldReceive('putLogEvents')
         ->andThrow(makeCloudWatchException('AccessDeniedException'));
 
@@ -199,8 +201,8 @@ it('ignores ResourceAlreadyExistsException when creating log group', function ()
     $client->shouldReceive('createLogGroup')
         ->once()
         ->andThrow(makeCloudWatchException('ResourceAlreadyExistsException'));
-    $client->shouldReceive('createLogStream')->once()->andReturn(new Result());
-    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result());
+    $client->shouldReceive('createLogStream')->once()->andReturn(new Result);
+    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result);
 
     $handler = new CloudWatchHandler(
         client: $client,
@@ -236,11 +238,11 @@ it('rethrows non-ResourceAlreadyExistsException from createLogGroup', function (
 it('ignores ResourceAlreadyExistsException when creating log stream', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
-    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result());
+    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result);
     $client->shouldReceive('createLogStream')
         ->once()
         ->andThrow(makeCloudWatchException('ResourceAlreadyExistsException'));
-    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result());
+    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result);
 
     $handler = new CloudWatchHandler(
         client: $client,
@@ -256,7 +258,7 @@ it('ignores ResourceAlreadyExistsException when creating log stream', function (
 it('rethrows non-ResourceAlreadyExistsException from createLogStream', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
-    $client->shouldReceive('createLogGroup')->andReturn(new Result());
+    $client->shouldReceive('createLogGroup')->andReturn(new Result);
     $client->shouldReceive('createLogStream')
         ->andThrow(makeCloudWatchException('AccessDeniedException'));
 
@@ -280,9 +282,9 @@ it('passes tags to createLogGroup when provided', function () {
     $client->shouldReceive('createLogGroup')
         ->once()
         ->with(Mockery::on(fn ($args) => $args['tags'] === ['team' => 'backend', 'project' => 'noria']))
-        ->andReturn(new Result());
-    $client->shouldReceive('createLogStream')->once()->andReturn(new Result());
-    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result());
+        ->andReturn(new Result);
+    $client->shouldReceive('createLogStream')->once()->andReturn(new Result);
+    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result);
 
     $handler = new CloudWatchHandler(
         client: $client,
@@ -302,9 +304,9 @@ it('omits tags from createLogGroup when empty', function () {
     $client->shouldReceive('createLogGroup')
         ->once()
         ->with(Mockery::on(fn ($args) => ! array_key_exists('tags', $args)))
-        ->andReturn(new Result());
-    $client->shouldReceive('createLogStream')->once()->andReturn(new Result());
-    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result());
+        ->andReturn(new Result);
+    $client->shouldReceive('createLogStream')->once()->andReturn(new Result);
+    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result);
 
     $handler = new CloudWatchHandler(
         client: $client,
@@ -321,17 +323,17 @@ it('omits tags from createLogGroup when empty', function () {
 it('resolves stream placeholders at flush time', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
-    $expectedStream = 'myapp-staging-' . date('Y-m-d') . '-' . gethostname();
+    $expectedStream = 'myapp-staging-'.date('Y-m-d').'-'.gethostname();
 
-    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result());
+    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result);
     $client->shouldReceive('createLogStream')
         ->once()
         ->with(Mockery::on(fn ($args) => $args['logStreamName'] === $expectedStream))
-        ->andReturn(new Result());
+        ->andReturn(new Result);
     $client->shouldReceive('putLogEvents')
         ->once()
         ->with(Mockery::on(fn ($args) => $args['logStreamName'] === $expectedStream))
-        ->andReturn(new Result());
+        ->andReturn(new Result);
 
     $handler = new CloudWatchHandler(
         client: $client,
@@ -349,9 +351,9 @@ it('reinitializes when resolved stream name changes', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
     // First flush creates group + stream, second flush creates new stream.
-    $client->shouldReceive('createLogGroup')->twice()->andReturn(new Result());
-    $client->shouldReceive('createLogStream')->twice()->andReturn(new Result());
-    $client->shouldReceive('putLogEvents')->twice()->andReturn(new Result());
+    $client->shouldReceive('createLogGroup')->twice()->andReturn(new Result);
+    $client->shouldReceive('createLogStream')->twice()->andReturn(new Result);
+    $client->shouldReceive('putLogEvents')->twice()->andReturn(new Result);
 
     $handler = new CloudWatchHandler(
         client: $client,
@@ -377,12 +379,12 @@ it('uses default values for missing stream context', function () {
 
     $expectedStream = 'laravel-production';
 
-    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result());
+    $client->shouldReceive('createLogGroup')->once()->andReturn(new Result);
     $client->shouldReceive('createLogStream')
         ->once()
         ->with(Mockery::on(fn ($args) => $args['logStreamName'] === $expectedStream))
-        ->andReturn(new Result());
-    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result());
+        ->andReturn(new Result);
+    $client->shouldReceive('putLogEvents')->once()->andReturn(new Result);
 
     $handler = new CloudWatchHandler(
         client: $client,

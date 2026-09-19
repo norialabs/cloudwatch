@@ -1,7 +1,8 @@
 <?php
 
+declare(strict_types=1);
+
 use Monolog\Logger;
-use NoriaLabs\CloudWatch\CloudWatchHandler;
 use NoriaLabs\CloudWatch\CloudWatchLoggerFactory;
 use NoriaLabs\CloudWatch\CloudWatchServiceProvider;
 use Psr\Log\LoggerInterface;
@@ -11,7 +12,7 @@ beforeEach(function () {
 });
 
 it('creates a logger instance from the factory', function () {
-    $factory = new CloudWatchLoggerFactory();
+    $factory = new CloudWatchLoggerFactory;
     $logger = $factory(['level' => 'info']);
 
     expect($logger)->toBeInstanceOf(LoggerInterface::class);
@@ -20,7 +21,7 @@ it('creates a logger instance from the factory', function () {
 it('registers the cloudwatch driver with the log manager', function () {
     $this->app['config']->set('logging.channels.cloudwatch', [
         'driver' => 'cloudwatch',
-        'level'  => 'debug',
+        'level' => 'debug',
     ]);
 
     $logger = $this->app->make('log')->channel('cloudwatch');
@@ -33,7 +34,7 @@ it('stores the stream template for runtime resolution', function () {
     $this->app['config']->set('app.env', 'staging');
     $this->app['config']->set('cloudwatch.log_stream', '{app}-{env}-{date}-{hostname}');
 
-    $factory = new CloudWatchLoggerFactory();
+    $factory = new CloudWatchLoggerFactory;
     /** @var Logger $logger */
     $logger = $factory(['level' => 'debug']);
     $handler = $logger->getHandlers()[0];
@@ -53,7 +54,7 @@ it('stores the stream template for runtime resolution', function () {
 it('passes tags from config to the handler', function () {
     $this->app['config']->set('cloudwatch.tags', ['team' => 'backend']);
 
-    $factory = new CloudWatchLoggerFactory();
+    $factory = new CloudWatchLoggerFactory;
     /** @var Logger $logger */
     $logger = $factory(['level' => 'debug']);
     $handler = $logger->getHandlers()[0];
@@ -66,7 +67,7 @@ it('uses IAM credentials when key and secret are not set', function () {
     $this->app['config']->set('cloudwatch.credentials.key', null);
     $this->app['config']->set('cloudwatch.credentials.secret', null);
 
-    $factory = new CloudWatchLoggerFactory();
+    $factory = new CloudWatchLoggerFactory;
     $logger = $factory(['level' => 'debug']);
 
     expect($logger)->toBeInstanceOf(LoggerInterface::class);
