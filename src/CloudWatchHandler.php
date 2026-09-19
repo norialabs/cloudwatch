@@ -83,7 +83,6 @@ class CloudWatchHandler extends AbstractProcessingHandler
 
         $stream = $this->resolveStream();
 
-        // If the stream changed (e.g. date rolled over), reinitialize.
         if ($stream !== $this->resolvedStream) {
             $this->resolvedStream = $stream;
             $this->initialized = false;
@@ -91,7 +90,6 @@ class CloudWatchHandler extends AbstractProcessingHandler
 
         $this->ensureInitialized();
 
-        // CloudWatch requires events sorted by timestamp.
         usort($this->buffer, fn (array $a, array $b) => $a['timestamp'] <=> $b['timestamp']);
 
         try {
@@ -101,7 +99,6 @@ class CloudWatchHandler extends AbstractProcessingHandler
                 'logEvents' => $this->buffer,
             ]);
         } catch (CloudWatchLogsException $e) {
-            // If the stream was deleted externally, recreate and retry once.
             if ($e->getAwsErrorCode() === 'ResourceNotFoundException') {
                 $this->initialized = false;
                 $this->ensureInitialized();

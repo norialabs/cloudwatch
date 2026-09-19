@@ -129,7 +129,6 @@ it('skips retention policy when set to null', function () {
 it('skips initialization when already initialized', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
-    // Only called once despite two flushes.
     $client->shouldReceive('createLogGroup')->once()->andReturn(new Result);
     $client->shouldReceive('createLogStream')->once()->andReturn(new Result);
     $client->shouldReceive('putLogEvents')->twice()->andReturn(new Result);
@@ -149,11 +148,9 @@ it('skips initialization when already initialized', function () {
 it('retries after ResourceNotFoundException by reinitializing', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
-    // First init.
     $client->shouldReceive('createLogGroup')->twice()->andReturn(new Result);
     $client->shouldReceive('createLogStream')->twice()->andReturn(new Result);
 
-    // First putLogEvents throws ResourceNotFoundException, second succeeds.
     $client->shouldReceive('putLogEvents')
         ->once()
         ->andThrow(makeCloudWatchException('ResourceNotFoundException'));
@@ -190,7 +187,6 @@ it('rethrows non-ResourceNotFoundException from putLogEvents', function () {
 
     expect(fn () => $handler->handle(makeRecord()))->toThrow(CloudWatchLogsException::class);
 
-    // Clear the buffer so __destruct doesn't retry.
     $reflection = new ReflectionProperty($handler, 'buffer');
     $reflection->setValue($handler, []);
 });
@@ -350,7 +346,6 @@ it('resolves stream placeholders at flush time', function () {
 it('reinitializes when resolved stream name changes', function () {
     $client = Mockery::mock(CloudWatchLogsClient::class);
 
-    // First flush creates group + stream, second flush creates new stream.
     $client->shouldReceive('createLogGroup')->twice()->andReturn(new Result);
     $client->shouldReceive('createLogStream')->twice()->andReturn(new Result);
     $client->shouldReceive('putLogEvents')->twice()->andReturn(new Result);
@@ -363,14 +358,11 @@ it('reinitializes when resolved stream name changes', function () {
         batchSize: 1,
     );
 
-    // First log flushes with 'static-stream'.
     $handler->handle(makeRecord('First'));
 
-    // Simulate stream name change (e.g. date rollover) by updating the template.
     $templateRef = new ReflectionProperty($handler, 'logStreamTemplate');
     $templateRef->setValue($handler, 'new-stream');
 
-    // Second log flushes — detects stream change and reinitializes.
     $handler->handle(makeRecord('Second'));
 });
 
@@ -392,7 +384,7 @@ it('uses default values for missing stream context', function () {
         logStream: '{app}-{env}',
         retention: null,
         batchSize: 1,
-        streamContext: [], // No context — should use defaults.
+        streamContext: [],
     );
 
     $handler->handle(makeRecord());

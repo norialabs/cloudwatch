@@ -19,10 +19,6 @@ function build(array $channel = []): Logger
 }
 
 describe('the fallback', function (): void {
-    /*
-     * A line CloudWatch will not take is lost without this, which matters
-     * most during the outage that makes the endpoint unreachable.
-     */
     it('writes beside the stream when the channel names a path', function (): void {
         $handler = build(['fallback_path' => sys_get_temp_dir().'/cwl-test.log'])->getHandlers()[0];
 
@@ -50,10 +46,6 @@ describe('the fallback', function (): void {
 });
 
 describe('per channel settings', function (): void {
-    /*
-     * An application channel batching at 25 and an audit channel sending
-     * each line immediately are two channels, not two applications.
-     */
     it('lets one channel differ from the config every other channel reads', function (): void {
         $logger = build(['name' => 'audit', 'batch_size' => 1, 'log_group' => 'audit-group']);
 
@@ -84,10 +76,6 @@ describe('the configured level', function (): void {
         expect(build()->getHandlers()[0]->getLevel())->toBe(Level::Error);
     });
 
-    /*
-     * A typo in one environment variable should not stop the application
-     * booting, and too much logging is the safer wrong answer.
-     */
     it('falls back to debug rather than throwing on a level nobody recognises', function (): void {
         config(['cloudwatch.level' => 'verbose']);
 
