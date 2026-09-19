@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
 
     /*
@@ -13,7 +15,7 @@ return [
     */
 
     'credentials' => [
-        'key'    => env('AWS_ACCESS_KEY_ID'),
+        'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),
     ],
 
@@ -39,7 +41,7 @@ return [
     |
     */
 
-    'log_group'  => env('CLOUDWATCH_LOG_GROUP', env('APP_NAME', 'laravel')),
+    'log_group' => env('CLOUDWATCH_LOG_GROUP', env('APP_NAME', 'laravel')),
     'log_stream' => env('CLOUDWATCH_LOG_STREAM', '{app}-{env}'),
 
     /*
@@ -92,4 +94,22 @@ return [
     */
 
     'tags' => [],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Fallback
+    |--------------------------------------------------------------------------
+    |
+    | A rotating file beside the stream. A line CloudWatch will not take is
+    | written here instead, which matters most during the outage that makes
+    | the endpoint unreachable - exactly when the logs are wanted.
+    |
+    | Set per channel in config/logging.php, or here for every channel.
+    | Null keeps the old behaviour: an unreachable endpoint loses the line.
+    |
+    */
+
+    'fallback_path' => env('CLOUDWATCH_FALLBACK_PATH'),
+
+    'fallback_days' => env('CLOUDWATCH_FALLBACK_DAYS', 14),
 ];

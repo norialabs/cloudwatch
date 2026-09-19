@@ -305,3 +305,39 @@ composer test
 ## License
 
 MIT
+
+## Fallback
+
+CloudWatch being unreachable is exactly when you want the logs, so a line it will not take should
+not simply vanish. Give the channel a path and the handler is wrapped: CloudWatch first, a
+rotating file after it.
+
+```php
+'cloudwatch' => [
+    'driver' => 'cloudwatch',
+    'level' => env('LOG_LEVEL', 'debug'),
+    'fallback_path' => storage_path('logs/cloudwatch.log'),
+    'fallback_days' => 14,
+],
+```
+
+Set it once in `config/cloudwatch.php` to cover every channel instead. Without a path the old
+behaviour stands and an unreachable endpoint loses the line.
+
+## Per channel settings
+
+Every setting may be given on the channel and falls back to `config/cloudwatch.php`, so two
+channels can differ - an application channel batching at 25 and an audit channel sending each
+line immediately:
+
+```php
+'audit' => [
+    'driver' => 'cloudwatch',
+    'log_group' => 'noria-audit',
+    'batch_size' => 1,
+],
+```
+
+A level nobody recognises falls back to debug rather than throwing out of channel construction: a
+typo in one environment variable should not stop the application booting, and too much logging is
+the safer wrong answer.

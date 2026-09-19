@@ -1,26 +1,30 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NoriaLabs\CloudWatch;
 
 use Illuminate\Support\ServiceProvider;
+use Psr\Log\LoggerInterface;
 
 class CloudWatchServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__ . '/../config/cloudwatch.php', 'cloudwatch');
+        $this->mergeConfigFrom(__DIR__.'/../config/cloudwatch.php', 'cloudwatch');
     }
 
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
             $this->publishes([
-                __DIR__ . '/../config/cloudwatch.php' => config_path('cloudwatch.php'),
+                __DIR__.'/../config/cloudwatch.php' => config_path('cloudwatch.php'),
             ]);
         }
 
-        $this->app->make('log')->extend('cloudwatch', function ($app, array $config) {
-            return (new CloudWatchLoggerFactory())($config);
+        $this->app->make('log')->extend('cloudwatch', function ($app, array $config): LoggerInterface {
+            /** @var array<string, mixed> $config */
+            return (new CloudWatchLoggerFactory)($config);
         });
     }
 }

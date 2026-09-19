@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NoriaLabs\CloudWatch;
 
 use Aws\CloudWatchLogs\CloudWatchLogsClient;
@@ -12,16 +14,23 @@ use Monolog\LogRecord;
 class CloudWatchHandler extends AbstractProcessingHandler
 {
     private CloudWatchLogsClient $client;
+
     private string $logGroup;
+
     private string $logStreamTemplate;
+
     private ?int $retention;
+
     private int $batchSize;
+
     /** @var array<string, string> */
     private array $tags;
+
     /** @var array<string, string> */
     private array $streamContext;
 
     private ?string $resolvedStream = null;
+
     private bool $initialized = false;
 
     /** @var array<int, array{timestamp: int, message: string}> */
@@ -58,7 +67,7 @@ class CloudWatchHandler extends AbstractProcessingHandler
     {
         $this->buffer[] = [
             'timestamp' => $record->datetime->getTimestamp() * 1000,
-            'message'   => $record->formatted ?? $record->message,
+            'message' => is_string($record->formatted) ? $record->formatted : $record->message,
         ];
 
         if (count($this->buffer) >= $this->batchSize) {
@@ -87,9 +96,9 @@ class CloudWatchHandler extends AbstractProcessingHandler
 
         try {
             $this->client->putLogEvents([
-                'logGroupName'  => $this->logGroup,
+                'logGroupName' => $this->logGroup,
                 'logStreamName' => $this->resolvedStream,
-                'logEvents'     => $this->buffer,
+                'logEvents' => $this->buffer,
             ]);
         } catch (CloudWatchLogsException $e) {
             // If the stream was deleted externally, recreate and retry once.
@@ -98,9 +107,9 @@ class CloudWatchHandler extends AbstractProcessingHandler
                 $this->ensureInitialized();
 
                 $this->client->putLogEvents([
-                    'logGroupName'  => $this->logGroup,
+                    'logGroupName' => $this->logGroup,
                     'logStreamName' => $this->resolvedStream,
-                    'logEvents'     => $this->buffer,
+                    'logEvents' => $this->buffer,
                 ]);
             } else {
                 throw $e;
@@ -123,7 +132,7 @@ class CloudWatchHandler extends AbstractProcessingHandler
 
     protected function getDefaultFormatter(): JsonFormatter
     {
-        return new JsonFormatter();
+        return new JsonFormatter;
     }
 
     private function resolveStream(): string
@@ -165,7 +174,7 @@ class CloudWatchHandler extends AbstractProcessingHandler
 
             if ($this->retention !== null) {
                 $this->client->putRetentionPolicy([
-                    'logGroupName'    => $this->logGroup,
+                    'logGroupName' => $this->logGroup,
                     'retentionInDays' => $this->retention,
                 ]);
             }
@@ -180,7 +189,7 @@ class CloudWatchHandler extends AbstractProcessingHandler
     {
         try {
             $this->client->createLogStream([
-                'logGroupName'  => $this->logGroup,
+                'logGroupName' => $this->logGroup,
                 'logStreamName' => $this->resolvedStream,
             ]);
         } catch (CloudWatchLogsException $e) {
