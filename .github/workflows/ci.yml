@@ -200,18 +200,23 @@ jobs:
           fi
 
       - name: Update Packagist
+        # Packagist hears about the tag from its own GitHub integration, which is
+        # how every version so far was published without this step ever posting
+        # anything. The ping is belt and braces for a repo whose hook is not
+        # wired, so it must never fail a release that is already on Packagist.
+        #
+        # Do not diagnose a lag from packagist.org/packages/<name>.json: that
+        # endpoint is cached for hours. repo.packagist.org/p2/<name>.json is what
+        # Composer reads and what tells you whether a version is really there.
+        continue-on-error: true
         env:
           PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
         run: |
           set -euo pipefail
 
-          # This used to be a bare `curl -sS`, which returns 0 on a 403. A missing
-          # or rotated token therefore left the tag pushed, the release created,
-          # the job green, and Packagist still serving the previous version. If
-          # nobody can install the tag, the release did not happen.
           if [ -z "${PACKAGIST_TOKEN:-}" ]; then
-            echo "PACKAGIST_TOKEN is not set, so Packagist will never see ${TAG_NAME:-this tag}."
-            exit 1
+            echo "No PACKAGIST_TOKEN here; leaving the update to the GitHub integration."
+            exit 0
           fi
 
           curl -sS --fail-with-body -XPOST \
