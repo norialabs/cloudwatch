@@ -13,18 +13,6 @@ use Monolog\Level;
 use Monolog\Logger;
 use Psr\Log\LoggerInterface;
 
-/**
- * Builds the `cloudwatch` log channel.
- *
- * Every setting may be given per channel and falls back to the cloudwatch
- * config, so two channels can differ - an application channel batching at
- * 25 and an audit channel sending each line immediately.
- *
- * With a fallback_path the handler is wrapped so a line that CloudWatch
- * will not take is written to a rotating file instead. Without one, an
- * unreachable endpoint loses the line, which is the wrong trade for the
- * logs you want most during an outage.
- */
 class CloudWatchLoggerFactory
 {
     /** @param array<string, mixed> $config */
@@ -54,10 +42,6 @@ class CloudWatchLoggerFactory
     }
 
     /**
-     * A rotating file beside the stream. FallbackGroupHandler tries each in
-     * turn and stops at the first that does not throw, so the line is
-     * written once when CloudWatch is up and once locally when it is not.
-     *
      * @param  array<string, mixed>  $config
      */
     private function withFallback(CloudWatchHandler $handler, array $config, string $level): HandlerInterface
@@ -105,10 +89,6 @@ class CloudWatchLoggerFactory
     }
 
     /**
-     * Credentials are passed only when both halves are present, so an
-     * incomplete pair falls through to the default provider chain rather
-     * than failing as a bad signature.
-     *
      * @param  array{credentials: array{key: string|null, secret: string|null}, region: string, version: string, ...}  $settings
      * @return array<string, mixed>
      */
@@ -125,12 +105,6 @@ class CloudWatchLoggerFactory
         return $client;
     }
 
-    /**
-     * A level nobody recognises falls back to debug rather than throwing
-     * out of channel construction: a typo in one environment variable
-     * should not stop the application booting, and too much logging is
-     * the safer wrong answer.
-     */
     private function level(string $name): Level
     {
         foreach (Level::cases() as $level) {

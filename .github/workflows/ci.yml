@@ -61,7 +61,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # A re-run must not mint a second tag for a commit that already has one.
           EXISTING=$(git tag --points-at HEAD --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)
 
           if [ -n "$EXISTING" ]; then
@@ -70,13 +69,6 @@ jobs:
             exit 0
           fi
 
-          # Refuse to hand out a version number that has already been used.
-          #
-          # A tag deleted from the repo does not un-publish the version. Packagist
-          # keeps the first commit it saw for a version and rejects any later change,
-          # which is how v0.1.12 ended up flagged "upstream re-tag blocked": it was
-          # tagged at one commit, deleted, then recreated at another. Composer users
-          # would have been served content that no branch contains.
           assert_version_unused() {
             TAG="$1"
 
@@ -98,7 +90,6 @@ jobs:
               exit 1
             fi
 
-            # The tag may be gone while the version stays published.
             FEED=$(curl -fsS --max-time 15 \
               "https://repo.packagist.org/p2/norialabs/cloudwatch.json" || true)
 
@@ -116,8 +107,6 @@ jobs:
             fi
           }
 
-          # The first public release for this package is v0.1.0. Ignore accidental
-          # v0.0.x tags if they exist from earlier workflow attempts.
           LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -Ev '^v0\.0\.' | head -n1 || true)
 
           if [ -z "$LATEST_TAG" ]; then
@@ -135,7 +124,6 @@ jobs:
 
           echo "Latest release tag: $LATEST_TAG"
 
-          # Parse current version
           VERSION="${LATEST_TAG#v}"
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
 
@@ -170,9 +158,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The tag name comes from the tag job. Re-deriving it here with
-      # `git describe` raced the tag that job had just pushed, so this step used
-      # to name the *previous* release and fail because it already existed.
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -185,7 +170,6 @@ jobs:
             exit 1
           fi
 
-          # The push may not be visible to this job's remote immediately.
           for _ in $(seq 1 10); do
             if git ls-remote --exit-code --tags origin "refs/tags/${TAG_NAME}" >/dev/null 2>&1; then
               break
@@ -200,14 +184,6 @@ jobs:
           fi
 
       - name: Update Packagist
-        # Packagist hears about the tag from its own GitHub integration, which is
-        # how every version so far was published without this step ever posting
-        # anything. The ping is belt and braces for a repo whose hook is not
-        # wired, so it must never fail a release that is already on Packagist.
-        #
-        # Do not diagnose a lag from packagist.org/packages/<name>.json: that
-        # endpoint is cached for hours. repo.packagist.org/p2/<name>.json is what
-        # Composer reads and what tells you whether a version is really there.
         continue-on-error: true
         env:
           PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}

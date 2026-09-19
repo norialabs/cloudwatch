@@ -39,11 +39,9 @@ it('stores the stream template for runtime resolution', function () {
     $logger = $factory(['level' => 'debug']);
     $handler = $logger->getHandlers()[0];
 
-    // Template is stored raw, not pre-resolved.
     $templateRef = new ReflectionProperty($handler, 'logStreamTemplate');
     expect($templateRef->getValue($handler))->toBe('{app}-{env}-{date}-{hostname}');
 
-    // Context carries app and env from config.
     $contextRef = new ReflectionProperty($handler, 'streamContext');
     expect($contextRef->getValue($handler))->toBe([
         'app' => 'myapp',
