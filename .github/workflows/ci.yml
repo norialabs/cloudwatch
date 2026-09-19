@@ -100,7 +100,7 @@ jobs:
 
             # The tag may be gone while the version stays published.
             FEED=$(curl -fsS --max-time 15 \
-              "https://repo.packagist.org/p2/thekiharani/laravel-cwl.json" || true)
+              "https://repo.packagist.org/p2/norialabs/cloudwatch.json" || true)
 
             if [ -z "$FEED" ]; then
               echo "Could not reach Packagist to confirm ${TAG} is unused; continuing."
@@ -204,7 +204,17 @@ jobs:
           PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
         run: |
           set -euo pipefail
-          curl -sS -XPOST \
+
+          # This used to be a bare `curl -sS`, which returns 0 on a 403. A missing
+          # or rotated token therefore left the tag pushed, the release created,
+          # the job green, and Packagist still serving the previous version. If
+          # nobody can install the tag, the release did not happen.
+          if [ -z "${PACKAGIST_TOKEN:-}" ]; then
+            echo "PACKAGIST_TOKEN is not set, so Packagist will never see ${TAG_NAME:-this tag}."
+            exit 1
+          fi
+
+          curl -sS --fail-with-body -XPOST \
             -H 'Content-Type: application/json' \
             "https://packagist.org/api/update-package?username=thekiharani&apiToken=${PACKAGIST_TOKEN}" \
-            -d '{"repository":{"url":"https://github.com/thekiharani/laravel-cwl"}}'
+            -d '{"repository":{"url":"https://github.com/norialabs/cloudwatch"}}'

@@ -1,5 +1,5 @@
 {
-  "name": "thekiharani/laravel-cwl",
+  "name": "norialabs/cloudwatch",
   "description": "AWS CloudWatch log driver for Laravel. Drop-in replacement — just switch LOG_CHANNEL=cloudwatch.",
   "keywords": [
     "laravel",
