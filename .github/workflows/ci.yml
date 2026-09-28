@@ -1,58 +1,140 @@
-name: CI
+name: Verify and release
 
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PRODUCTION_BRANCH: main
 
 jobs:
-  test:
-    runs-on: ubuntu-24.04
-
-    strategy:
-      matrix:
-        php: ["8.2", "8.3", "8.4", "8.5"]
-
-    name: PHP ${{ matrix.php }}
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ matrix.php }}
-          coverage: xdebug
-
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
-
-      - name: Run tests
-        run: ./vendor/bin/pest --coverage
-
   verify:
-    needs: test
-    runs-on: ubuntu-24.04
+    name: Verify what changed
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
     permissions:
       contents: read
-
+      checks: read
+      pull-requests: read
+    outputs:
+      release: ${{ steps.scope.outputs.release }}
     steps:
-      - name: Required checks passed
-        run: echo "All required CI checks passed."
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Look for a pull request that already verified this tree
+        id: reuse
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          tree="$(git rev-parse "${GITHUB_SHA}^{tree}")"
+          verified=false
+
+          for head in $(gh api "repos/${REPO}/commits/${GITHUB_SHA}/pulls" --jq '.[] | select(.merged_at != null) | .head.sha'); do
+            [ "$(gh api "repos/${REPO}/commits/${head}" --jq .commit.tree.sha)" = "$tree" ] || continue
+            passed="$(gh api "repos/${REPO}/commits/${head}/check-runs?check_name=Verify%20what%20changed&filter=all" \
+              --jq '[.check_runs[] | select(.conclusion == "success")] | length')"
+            if [ "$passed" -gt 0 ]; then
+              echo "tree ${tree} passed verify on pull request head ${head}"
+              verified=true
+              break
+            fi
+          done
+
+          echo "verified=${verified}" >> "${GITHUB_OUTPUT}"
+
+      - name: Work out what changed
+        id: scope
+        env:
+          VERIFIED: ${{ steps.reuse.outputs.verified }}
+          BEFORE: ${{ github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          base="${BASE:-${BEFORE:-}}"
+
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            changed='EVERYTHING'
+          else
+            changed="$(git diff --name-only "$base" "${GITHUB_SHA}")"
+          fi
+
+          scope() {
+            if [ "$changed" = 'EVERYTHING' ]; then
+              echo true
+              return
+            fi
+            if printf '%s\n' "$changed" | grep -qE "$1"; then echo true; else echo false; fi
+          }
+
+          php="$(scope '^(src/|config/|tests/|composer\.json|phpstan\.neon|pint\.json|\.github/)')"
+
+          release=false
+          if [ "${GITHUB_EVENT_NAME}" != 'pull_request' ] && [ "${GITHUB_REF_NAME}" = "${PRODUCTION_BRANCH}" ]; then
+            release=true
+          fi
+
+          echo "release=${release}" >> "${GITHUB_OUTPUT}"
+
+          if [ "${VERIFIED:-false}" = true ]; then
+            php=false
+          fi
+
+          echo "php=${php}" >> "${GITHUB_OUTPUT}"
+
+          echo "changed scopes: php=${php} release=${release}"
+
+      - name: Set up PHP 8.5
+        if: steps.scope.outputs.php == 'true'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.5"
+          coverage: none
+
+      - name: Install Composer dependencies
+        if: steps.scope.outputs.php == 'true'
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Analyse the package statically
+        if: steps.scope.outputs.php == 'true'
+        run: vendor/bin/phpstan analyse --no-progress
+
+      - name: Check the code style
+        if: steps.scope.outputs.php == 'true'
+        run: vendor/bin/pint --test
 
   tag:
+    name: Tag the release
     needs: verify
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    if: needs.verify.outputs.release == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
     permissions:
       contents: write
     outputs:
       name: ${{ steps.tag.outputs.name }}
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Check out the repository
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -147,14 +229,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release:
+    name: Publish the release
     needs: [verify, tag]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.tag.result == 'success'
-    runs-on: ubuntu-24.04
+    if: needs.verify.outputs.release == 'true' && needs.tag.result == 'success'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
     permissions:
       contents: write
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Check out the repository
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
