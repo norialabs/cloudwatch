@@ -33,7 +33,7 @@ class CloudWatchHandler extends AbstractProcessingHandler
 
     private bool $initialized = false;
 
-    /** @var array<int, array{timestamp: int, message: string}> */
+    /** @var list<array{timestamp: int, message: string}> */
     private array $buffer = [];
 
     /**
@@ -88,24 +88,24 @@ class CloudWatchHandler extends AbstractProcessingHandler
             $this->initialized = false;
         }
 
-        $this->ensureInitialized();
+        $this->ensureInitialized($stream);
 
         usort($this->buffer, fn (array $a, array $b) => $a['timestamp'] <=> $b['timestamp']);
 
         try {
             $this->client->putLogEvents([
                 'logGroupName' => $this->logGroup,
-                'logStreamName' => $this->resolvedStream,
+                'logStreamName' => $stream,
                 'logEvents' => $this->buffer,
             ]);
         } catch (CloudWatchLogsException $e) {
             if ($e->getAwsErrorCode() === 'ResourceNotFoundException') {
                 $this->initialized = false;
-                $this->ensureInitialized();
+                $this->ensureInitialized($stream);
 
                 $this->client->putLogEvents([
                     'logGroupName' => $this->logGroup,
-                    'logStreamName' => $this->resolvedStream,
+                    'logStreamName' => $stream,
                     'logEvents' => $this->buffer,
                 ]);
             } else {
@@ -146,14 +146,14 @@ class CloudWatchHandler extends AbstractProcessingHandler
         );
     }
 
-    private function ensureInitialized(): void
+    private function ensureInitialized(string $stream): void
     {
         if ($this->initialized) {
             return;
         }
 
         $this->ensureLogGroupExists();
-        $this->ensureLogStreamExists();
+        $this->ensureLogStreamExists($stream);
 
         $this->initialized = true;
     }
@@ -182,12 +182,12 @@ class CloudWatchHandler extends AbstractProcessingHandler
         }
     }
 
-    private function ensureLogStreamExists(): void
+    private function ensureLogStreamExists(string $stream): void
     {
         try {
             $this->client->createLogStream([
                 'logGroupName' => $this->logGroup,
-                'logStreamName' => $this->resolvedStream,
+                'logStreamName' => $stream,
             ]);
         } catch (CloudWatchLogsException $e) {
             if ($e->getAwsErrorCode() !== 'ResourceAlreadyExistsException') {
