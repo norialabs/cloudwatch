@@ -19,6 +19,7 @@ class CloudWatchLoggerFactory
     public function __invoke(array $config): LoggerInterface
     {
         $settings = $this->settings($config);
+        $fallback = $this->fallback($config, $settings['level']);
 
         $handler = new CloudWatchHandler(
             client: new CloudWatchLogsClient($this->clientConfig($settings)),
@@ -32,35 +33,33 @@ class CloudWatchLoggerFactory
                 'app' => $this->text(config('app.name'), 'laravel'),
                 'env' => $this->text(config('app.env'), 'production'),
             ],
+            fallback: $fallback,
         );
 
         $handler->setFormatter(new JsonFormatter);
 
         return new Logger($this->text($config['name'] ?? null, 'cloudwatch'), [
-            $this->withFallback($handler, $config, $settings['level']),
+            $fallback === null ? $handler : new FallbackGroupHandler([$handler, $fallback]),
         ]);
     }
 
     /**
      * @param  array<string, mixed>  $config
      */
-    private function withFallback(CloudWatchHandler $handler, array $config, string $level): HandlerInterface
+    private function fallback(array $config, string $level): ?HandlerInterface
     {
         $global = (array) config('cloudwatch', []);
         $path = $this->nullableText($config['fallback_path'] ?? $global['fallback_path'] ?? null);
 
         if ($path === null) {
-            return $handler;
+            return null;
         }
 
-        return new FallbackGroupHandler([
-            $handler,
-            new RotatingFileHandler(
-                $path,
-                $this->positiveInt($config['fallback_days'] ?? $global['fallback_days'] ?? null, 14),
-                $this->level($level),
-            ),
-        ]);
+        return new RotatingFileHandler(
+            $path,
+            $this->positiveInt($config['fallback_days'] ?? $global['fallback_days'] ?? null, 14),
+            $this->level($level),
+        );
     }
 
     /**

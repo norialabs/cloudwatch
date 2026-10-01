@@ -135,7 +135,7 @@ CLOUDWATCH_LOG_RETENTION=
 |----------|---------|-------------|
 | `CLOUDWATCH_BATCH_SIZE` | `25` | Events buffered before flushing to CloudWatch |
 
-Logs are buffered in memory and sent in batches to reduce API calls. The buffer is always flushed on application shutdown, so no logs are lost.
+Logs are buffered in memory and sent in batches to reduce API calls. The buffer also flushes once it holds 1 MB, and every flush is split into requests CloudWatch accepts: at most 10,000 events, 1,048,576 bytes (26 bytes of overhead counted per event) and 24 hours apart. A single event over 256 KB is cut to fit. The buffer is flushed on `close()` and on `reset()`, so long-running workers (Octane, queue workers) should reset their loggers after each request or job.
 
 - **Higher values** (50-100): fewer API calls, better throughput, slightly delayed delivery
 - **Lower values** (1-5): near-real-time delivery, more API calls
@@ -239,9 +239,10 @@ Override the group/stream per channel by setting different env vars or adjusting
 2. **Buffering** — Log events are buffered in memory until the batch size is reached or the application shuts down.
 3. **Stream resolution** — On each flush, the stream name template is resolved with current values (`{date}` = today). If the resolved name changed since the last flush, a new stream is created automatically.
 4. **Auto-creation** — The log group and stream are created on first use. If they already exist, the `ResourceAlreadyExistsException` is silently ignored.
-5. **Flushing** — Buffered events are sorted by timestamp and sent to CloudWatch via `putLogEvents`.
+5. **Flushing**: Buffered events are sorted by timestamp, split into batches within CloudWatch's limits and sent via `putLogEvents`. The buffer is emptied before sending, so a failure is never retried on the next log call.
 6. **Self-healing** — If the stream is deleted externally mid-run, the handler catches the `ResourceNotFoundException`, recreates the group/stream, and retries the flush.
-7. **Shutdown** — Any remaining buffered logs are flushed on `close()` and `__destruct()`, so logs are never lost.
+7. **Refusals**: A batch CloudWatch refuses is written once to the fallback file with a warning, when a `fallback_path` is set; without one the error is thrown after the batch is dropped.
+8. **Shutdown**: Any remaining buffered logs are flushed on `close()` and `reset()`.
 
 All log entries are JSON-formatted via Monolog's `JsonFormatter`.
 
