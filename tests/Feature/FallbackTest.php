@@ -40,6 +40,13 @@ describe('the fallback', function (): void {
         expect(build()->getHandlers()[0])->toBeInstanceOf(FallbackGroupHandler::class);
     });
 
+    it('receives the events cloudwatch refused, in the same file', function (): void {
+        $group = build(['fallback_path' => sys_get_temp_dir().'/cwl-test.log'])->getHandlers()[0];
+        [$cloudwatch, $file] = (new ReflectionProperty(FallbackGroupHandler::class, 'handlers'))->getValue($group);
+
+        expect((new ReflectionProperty(CloudWatchHandler::class, 'fallback'))->getValue($cloudwatch))->toBe($file);
+    });
+
     it('is left out when nobody asked for one', function (): void {
         expect(build()->getHandlers()[0])->toBeInstanceOf(CloudWatchHandler::class);
     });

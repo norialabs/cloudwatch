@@ -8,11 +8,23 @@ use Aws\CloudWatchLogs\CloudWatchLogsClient;
 use Aws\CloudWatchLogs\Exception\CloudWatchLogsException;
 use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\AbstractProcessingHandler;
+use Monolog\Handler\HandlerInterface;
 use Monolog\Level;
 use Monolog\LogRecord;
+use Throwable;
 
 class CloudWatchHandler extends AbstractProcessingHandler
 {
+    public const MAX_BATCH_BYTES = 1_048_576;
+
+    public const MAX_BATCH_EVENTS = 10_000;
+
+    public const EVENT_OVERHEAD_BYTES = 26;
+
+    public const MAX_EVENT_BYTES = 262_144;
+
+    public const MAX_BATCH_SPAN_MS = 86_400_000;
+
     private CloudWatchLogsClient $client;
 
     private string $logGroup;
@@ -29,17 +41,22 @@ class CloudWatchHandler extends AbstractProcessingHandler
     /** @var array<string, string> */
     private array $streamContext;
 
+    private ?HandlerInterface $fallback;
+
     private ?string $resolvedStream = null;
 
     private bool $initialized = false;
 
-    /** @var list<array{timestamp: int, message: string}> */
+    /** @var list<array{timestamp: int, message: string, record: LogRecord}> */
     private array $buffer = [];
+
+    private int $bufferedBytes = 0;
 
     /**
      * @param  string  $logStream  Stream name or template with placeholders: {app}, {env}, {date}, {hostname}
      * @param  array<string, string>  $tags  Key-value tags applied to the log group on creation.
      * @param  array<string, string>  $streamContext  Values for {app} and {env} placeholders. {date} and {hostname} are always resolved at flush time.
+     * @param  HandlerInterface|null  $fallback  Receives events CloudWatch refused, once, instead of the handler throwing.
      */
     public function __construct(
         CloudWatchLogsClient $client,
@@ -51,6 +68,7 @@ class CloudWatchHandler extends AbstractProcessingHandler
         bool $bubble = true,
         array $tags = [],
         array $streamContext = [],
+        ?HandlerInterface $fallback = null,
     ) {
         parent::__construct($level, $bubble);
 
@@ -58,28 +76,39 @@ class CloudWatchHandler extends AbstractProcessingHandler
         $this->logGroup = $logGroup;
         $this->logStreamTemplate = $logStream;
         $this->retention = $retention;
-        $this->batchSize = $batchSize;
+        $this->batchSize = min(max(1, $batchSize), self::MAX_BATCH_EVENTS);
         $this->tags = $tags;
         $this->streamContext = $streamContext;
+        $this->fallback = $fallback;
     }
 
     protected function write(LogRecord $record): void
     {
-        $this->buffer[] = [
-            'timestamp' => $record->datetime->getTimestamp() * 1000,
-            'message' => is_string($record->formatted) ? $record->formatted : $record->message,
-        ];
+        $message = $this->fitEvent(is_string($record->formatted) ? $record->formatted : $record->message);
 
-        if (count($this->buffer) >= $this->batchSize) {
+        $this->buffer[] = [
+            'timestamp' => (int) $record->datetime->format('Uv'),
+            'message' => $message,
+            'record' => $record,
+        ];
+        $this->bufferedBytes += strlen($message) + self::EVENT_OVERHEAD_BYTES;
+
+        if (count($this->buffer) >= $this->batchSize || $this->bufferedBytes >= self::MAX_BATCH_BYTES) {
             $this->flush();
         }
     }
 
     public function flush(): void
     {
-        if (empty($this->buffer)) {
+        if ($this->buffer === []) {
             return;
         }
+
+        $pending = $this->buffer;
+        $this->buffer = [];
+        $this->bufferedBytes = 0;
+
+        usort($pending, fn (array $a, array $b) => $a['timestamp'] <=> $b['timestamp']);
 
         $stream = $this->resolveStream();
 
@@ -88,32 +117,26 @@ class CloudWatchHandler extends AbstractProcessingHandler
             $this->initialized = false;
         }
 
-        $this->ensureInitialized($stream);
+        $failure = null;
 
-        usort($this->buffer, fn (array $a, array $b) => $a['timestamp'] <=> $b['timestamp']);
-
-        try {
-            $this->client->putLogEvents([
-                'logGroupName' => $this->logGroup,
-                'logStreamName' => $stream,
-                'logEvents' => $this->buffer,
-            ]);
-        } catch (CloudWatchLogsException $e) {
-            if ($e->getAwsErrorCode() === 'ResourceNotFoundException') {
-                $this->initialized = false;
-                $this->ensureInitialized($stream);
-
-                $this->client->putLogEvents([
-                    'logGroupName' => $this->logGroup,
-                    'logStreamName' => $stream,
-                    'logEvents' => $this->buffer,
-                ]);
-            } else {
-                throw $e;
+        foreach ($this->batches($pending) as $batch) {
+            try {
+                $this->send($stream, $batch);
+            } catch (Throwable $e) {
+                $failure ??= $e;
+                $this->park($batch, $e);
             }
         }
 
-        $this->buffer = [];
+        if ($failure !== null && $this->fallback === null) {
+            throw $failure;
+        }
+    }
+
+    public function reset(): void
+    {
+        $this->flush();
+        parent::reset();
     }
 
     public function close(): void
@@ -122,14 +145,100 @@ class CloudWatchHandler extends AbstractProcessingHandler
         parent::close();
     }
 
-    public function __destruct()
-    {
-        $this->flush();
-    }
-
     protected function getDefaultFormatter(): JsonFormatter
     {
         return new JsonFormatter;
+    }
+
+    /**
+     * @param  list<array{timestamp: int, message: string, record: LogRecord}>  $events
+     * @return list<non-empty-list<array{timestamp: int, message: string, record: LogRecord}>>
+     */
+    private function batches(array $events): array
+    {
+        $batches = [];
+        $batch = [];
+        $bytes = 0;
+
+        foreach ($events as $event) {
+            $size = strlen($event['message']) + self::EVENT_OVERHEAD_BYTES;
+
+            if ($batch !== [] && (
+                count($batch) >= self::MAX_BATCH_EVENTS
+                || $bytes + $size > self::MAX_BATCH_BYTES
+                || $event['timestamp'] - $batch[0]['timestamp'] >= self::MAX_BATCH_SPAN_MS
+            )) {
+                $batches[] = $batch;
+                $batch = [];
+                $bytes = 0;
+            }
+
+            $batch[] = $event;
+            $bytes += $size;
+        }
+
+        if ($batch !== []) {
+            $batches[] = $batch;
+        }
+
+        return $batches;
+    }
+
+    /** @param  non-empty-list<array{timestamp: int, message: string, record: LogRecord}>  $batch */
+    private function send(string $stream, array $batch): void
+    {
+        $this->ensureInitialized($stream);
+
+        $request = [
+            'logGroupName' => $this->logGroup,
+            'logStreamName' => $stream,
+            'logEvents' => array_map(
+                fn (array $event): array => ['timestamp' => $event['timestamp'], 'message' => $event['message']],
+                $batch,
+            ),
+        ];
+
+        try {
+            $this->client->putLogEvents($request);
+        } catch (CloudWatchLogsException $e) {
+            if ($e->getAwsErrorCode() !== 'ResourceNotFoundException') {
+                throw $e;
+            }
+
+            $this->initialized = false;
+            $this->ensureInitialized($stream);
+            $this->client->putLogEvents($request);
+        }
+    }
+
+    /** @param  non-empty-list<array{timestamp: int, message: string, record: LogRecord}>  $batch */
+    private function park(array $batch, Throwable $failure): void
+    {
+        if ($this->fallback === null) {
+            return;
+        }
+
+        $first = $batch[0]['record'];
+
+        try {
+            $this->fallback->handle(new LogRecord(
+                datetime: $first->datetime,
+                channel: $first->channel,
+                level: Level::Warning,
+                message: sprintf('CloudWatch refused %d log events; they follow here instead.', count($batch)),
+                context: ['error' => $failure->getMessage(), 'log_group' => $this->logGroup],
+            ));
+            $this->fallback->handleBatch(array_map(fn (array $event): LogRecord => $event['record'], $batch));
+        } catch (Throwable) {
+            // The fallback is the last resort: losing it must not fail the request.
+        }
+    }
+
+    private function fitEvent(string $message): string
+    {
+        $limit = self::MAX_EVENT_BYTES - self::EVENT_OVERHEAD_BYTES;
+
+        return strlen($message) > $limit ? mb_strcut($message, 0, $limit, 'UTF-8') : $message;
     }
 
     private function resolveStream(): string
