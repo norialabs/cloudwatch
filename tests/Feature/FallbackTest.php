@@ -6,8 +6,8 @@ use Monolog\Handler\FallbackGroupHandler;
 use Monolog\Handler\RotatingFileHandler;
 use Monolog\Level;
 use Monolog\Logger;
-use NoriaLabs\CloudWatch\CloudWatchHandler;
-use NoriaLabs\CloudWatch\CloudWatchLoggerFactory;
+use Noria\CloudWatch\CloudWatchHandler;
+use Noria\CloudWatch\CloudWatchLoggerFactory;
 
 function build(array $channel = []): Logger
 {

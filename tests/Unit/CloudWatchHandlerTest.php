@@ -10,7 +10,7 @@ use Monolog\Formatter\LineFormatter;
 use Monolog\Handler\TestHandler;
 use Monolog\Level;
 use Monolog\LogRecord;
-use NoriaLabs\CloudWatch\CloudWatchHandler;
+use Noria\CloudWatch\CloudWatchHandler;
 
 function makeRecord(string $message = 'Test message', Level $level = Level::Info): LogRecord
 {
