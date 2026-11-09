@@ -37,18 +37,18 @@
     },
     "autoload": {
         "psr-4": {
-            "NoriaLabs\\CloudWatch\\": "src/"
+            "Noria\\CloudWatch\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "NoriaLabs\\CloudWatch\\Tests\\": "tests/"
+            "Noria\\CloudWatch\\Tests\\": "tests/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "NoriaLabs\\CloudWatch\\CloudWatchServiceProvider"
+                "Noria\\CloudWatch\\CloudWatchServiceProvider"
             ]
         }
     },

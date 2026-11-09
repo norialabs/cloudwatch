@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use Monolog\Logger;
-use NoriaLabs\CloudWatch\CloudWatchLoggerFactory;
-use NoriaLabs\CloudWatch\CloudWatchServiceProvider;
+use Noria\CloudWatch\CloudWatchLoggerFactory;
+use Noria\CloudWatch\CloudWatchServiceProvider;
 use Psr\Log\LoggerInterface;
 
 beforeEach(function () {

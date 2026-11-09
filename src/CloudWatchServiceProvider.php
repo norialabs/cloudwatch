@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NoriaLabs\CloudWatch;
+namespace Noria\CloudWatch;
 
 use Illuminate\Support\ServiceProvider;
 use Psr\Log\LoggerInterface;

@@ -20,10 +20,17 @@ composer require norialabs/cloudwatch
 The service provider is auto-discovered. Publish the config file:
 
 ```bash
-php artisan vendor:publish --provider="NoriaLabs\CloudWatch\CloudWatchServiceProvider"
+php artisan vendor:publish --provider="Noria\CloudWatch\CloudWatchServiceProvider"
 ```
 
 This creates `config/cloudwatch.php`.
+
+## Upgrading from 0.1
+
+0.2 moves the namespace from `NoriaLabs\CloudWatch\` to `Noria\CloudWatch\` and changes nothing else.
+Require `norialabs/cloudwatch:^0.2`, then replace `NoriaLabs\CloudWatch\` with `Noria\CloudWatch\` in imports,
+configuration files and container bindings, and clear the cached configuration. The old
+namespace has no aliases.
 
 ## Quick Start
 
